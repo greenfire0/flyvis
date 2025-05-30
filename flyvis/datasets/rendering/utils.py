@@ -81,6 +81,7 @@ def split(
     out_nelements: int,
     n_splits: int,
     center_crop_fraction: Optional[float] = 0.7,
+    last_ele: Optional[int] = -1,
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Split an array into overlapping segments along the last dimension.
@@ -107,22 +108,23 @@ def split(
     assert isinstance(array, (np.ndarray, torch.Tensor))
     if center_crop_fraction is not None:
         return split(
-            center_crop(array, center_crop_fraction),
+            center_crop(array, center_crop_fraction,last_ele),
             out_nelements,
             n_splits,
             center_crop_fraction=None,
+            last_ele=last_ele
         )
 
-    actual_nelements = array.shape[-1]
+    actual_nelements = array.shape[last_ele]
     out_nelements = int(out_nelements)
 
     def take(
         arr: Union[np.ndarray, torch.Tensor], start: int, stop: int
     ) -> Union[np.ndarray, torch.Tensor]:
         if isinstance(arr, np.ndarray):
-            return np.take(arr, np.arange(start, stop), axis=-1)[None]
+            return np.take(arr, np.arange(start, stop), axis=last_ele)[None]
         elif isinstance(arr, torch.Tensor):
-            return torch.index_select(arr, dim=-1, index=torch.arange(start, stop))[None]
+            return torch.index_select(arr, dim=last_ele, index=torch.arange(start, stop))[None]
 
     if n_splits == 1:
         out = (array[None, :],)
@@ -148,7 +150,8 @@ def split(
 
 
 def center_crop(
-    array: Union[np.ndarray, torch.Tensor], out_nelements_ratio: float
+    array: Union[np.ndarray, torch.Tensor], out_nelements_ratio: float,
+    last_ele: Optional[int] = -1,
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Centrally crop an array along the last dimension with given ratio.
@@ -163,11 +166,11 @@ def center_crop(
 
     def take(arr, start, stop):
         if isinstance(arr, np.ndarray):
-            return np.take(arr, np.arange(start, stop), axis=-1)
+            return np.take(arr, np.arange(start, stop), axis=last_ele)
         elif isinstance(arr, torch.Tensor):
-            return torch.index_select(arr, dim=-1, index=torch.arange(start, stop))
+            return torch.index_select(arr, dim=last_ele, index=torch.arange(start, stop))
 
-    nelements = array.shape[-1]
+    nelements = array.shape[last_ele]
     out_nelements = int(out_nelements_ratio * nelements)
     return take(array, (nelements - out_nelements) // 2, (nelements + out_nelements) // 2)
 

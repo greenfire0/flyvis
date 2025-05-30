@@ -338,10 +338,20 @@ class RestingPotential(Parameter):
     @deepcopy_config
     def __init__(self, param_config: Namespace, connectome: ConnectomeFromAvgFilters):
         nodes_dir = connectome.nodes
-
-        nodes = pd.DataFrame({
-            k: byte_to_str(nodes_dir[k][:]) for k in param_config.groupby
-        })
+        groupby_keys = param_config.groupby or []
+        if groupby_keys:
+            nodes = pd.DataFrame({
+                k: byte_to_str(nodes_dir[k][:]) for k in groupby_keys
+            })
+            grouped = nodes.groupby(
+                groupby_keys, as_index=False, sort=False
+            ).first()
+        else:
+            # no grouping: just read each node's type
+            nodes = pd.DataFrame({
+                "type": byte_to_str(nodes_dir["type"][:])
+            })
+            grouped = nodes.copy()
         grouped_nodes = nodes.groupby(
             param_config.groupby, as_index=False, sort=False
         ).first()
@@ -364,7 +374,6 @@ class TimeConstant(Parameter):
     @deepcopy_config
     def __init__(self, param_config: Namespace, connectome: ConnectomeFromAvgFilters):
         nodes_dir = connectome.nodes
-
         nodes = pd.DataFrame({
             k: byte_to_str(nodes_dir[k][:]) for k in param_config.groupby
         })
