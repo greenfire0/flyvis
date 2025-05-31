@@ -14,7 +14,8 @@ from flyvis.task.mc_decoder import MCDecoderGAVP as DecoderGAVP
 from flyvis.task.objectives import epe
 from flyvis.utils.hex_utils import get_hex_coords
 from debug_frames import save_debug_grid,save_debug_flow
-from compare_util import hex_to_square, flow_to_rgb
+from compare_util import hex_to_square, flow_to_rgb, MatchFlowCDF, FT3DMatched
+
 # ─────────── tweak-here hyper-params ───────────────────────────
 FT3D_ROOT      = Path(os.getenv("FT3D_ROOT", "/mnt/s/datasets/FlyingThings3D"))
 FLOW_SCALE     = 1 
@@ -43,6 +44,21 @@ def build_loader(batch: int, augment: bool):
         augment=augment,
         _init_cache=True,
     )
+    data = dataset1[0]
+    lum = ds[0]["rgb"]
+    flow = data["flow"]
+
+    ft3d_matched = torch.utils.data.Dataset()   # tiny wrapper
+
+    percentiles      = np.linspace(0, 100, 1000)
+    q_src            = np.percentile(mags_ft3d,   percentiles)   # 1 × 1000
+    q_tgt            = np.percentile(mags_sintel, percentiles)   # 1 × 1000
+    q_src = torch.as_tensor(q_src,  dtype=torch.float32)   # shape (Q,)
+    q_tgt = torch.as_tensor(q_tgt,  dtype=torch.float32)
+
+    flow_matcher   = MatchFlowCDF(q_src, q_tgt)
+    dataset1_matched = FT3DMatched(dataset1, flow_matcher)
+
     return DataLoader(
         ds,
         batch_size=batch,
