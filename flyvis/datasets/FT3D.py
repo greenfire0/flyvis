@@ -110,7 +110,7 @@ class RenderedFlyingThings3D(Directory):
                 #quit()
 
                 path = f"sequence_{i:05d}_{group}_{seq_id}_split_{j:02d}"
-                self[f"{path}/rgb"] = rgb_hex[j]
+                self[f"{path}/lum"] = rgb_hex[j]
                 if "flow" in tasks:
                     self[f"{path}/flow"] = flow_hex[j]
             if unittest:
@@ -130,7 +130,7 @@ class MultiTaskFlyingThings3D(MultiTaskDataset):
     original_framerate: int = 15  # Hz
     dt: float = 1 / 50
     tasks: List[str] = []
-    valid_tasks: List[str] = ["rgb", "flow"]
+    valid_tasks: List[str] = ["lum", "flow"]
 
     def __init__(
         self,
