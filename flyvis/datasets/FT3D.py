@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import re
 import os
-import cv2
 import numpy as np
 import pandas as pd
 import torch
@@ -161,24 +160,27 @@ class MultiTaskFlyingThings3D(MultiTaskDataset):
         self.dt = dt
         self.all_frames = all_frames
         self.resampling = resampling
+        self.interpolate = interpolate
         self.random_temporal_crop = random_temporal_crop
         self.flip_axes = flip_axes
         self.fix_augmentation_params = False
+
 
         # augmentation params (HexFlip/Rotate etc.) – defer to parent helpers
         self.contrast_std = contrast_std
         self.brightness_std = brightness_std
         self.gaussian_white_noise = gaussian_white_noise
         self.gamma_std = gamma_std
-        self.augment = augment
-
-        # rendered cache ----------------------------------------------------
         self.ft3d_path = Path(ft3d_path or os.getenv("FT3D_ROOT", ""))
         if not self.ft3d_path.is_dir():
             raise FileNotFoundError("ft3d_path not found. Pass it explicitly or set $FT3D_ROOT")
 
         self.rendered = RenderedFlyingThings3D(tasks=self.tasks, n_frames=n_frames, unittest=unittest, ft3d_path=self.ft3d_path)
-
+        self.init_augmentation()
+        self.augment = augment
+        self.piecewise_resample.augment = resampling
+        self.linear_interpolate.augment = interpolate
+        self._augmentations_are_initialized = True
         #self.arg_df = pd.DataFrame(dict(index=np.arange(len(self.rendered))))
         if _init_cache:
             self.init_cache()
@@ -197,8 +199,7 @@ class MultiTaskFlyingThings3D(MultiTaskDataset):
 
             # ---------- build the cache entry ----------
             entry = {
-                k: torch.tensor(blob[k], dtype=torch.float32) *
-                (scale_amt if k == "flow" else 1.0)
+                k: torch.tensor(blob[k], dtype=torch.float32)
                 for k in self.data_keys if k in blob
             }
             self.cached_sequences.append(entry)
@@ -221,6 +222,44 @@ class MultiTaskFlyingThings3D(MultiTaskDataset):
         self.arg_df = pd.DataFrame(arg_records)
 
 
+    def init_augmentation(self) -> None:
+        """Create all temporal-and-spatial augmentation callables."""
+        # temporal window crop
+        self.temporal_crop = CropFrames(
+            self.n_frames, all_frames=self.all_frames,
+            random=self.random_temporal_crop
+        )
+        # photometric + geometric aug
+        self.jitter  = ContrastBrightness(self.contrast_std, self.brightness_std)
+        self.noise   = PixelNoise(self.gaussian_white_noise)
+        extent = 15 # or boxfilter["extent"] if you want it parametric
+        self.rotate = HexRotate(extent, p_rot=0)
+        self.flip = HexFlip (extent, p_flip=0)
+
+        # time-axis resamplers (same objects Sintel uses)
+        self.piecewise_resample = Interpolate(
+            self.original_framerate, 1 / self.dt, mode="nearest-exact"
+        )
+        self.linear_interpolate = Interpolate(
+            self.original_framerate, 1 / self.dt, mode="linear"
+        )
+        # gamma
+        self.gamma_correct = GammaCorrection(1.0, self.gamma_std)
+    def apply_augmentation(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """Crop + optional resample / interpolate."""
+        def temporal_ops(x):
+            x = self.temporal_crop(x)
+            if self.interpolate:
+                x = self.linear_interpolate(x)
+            elif self.resampling:
+                x = self.piecewise_resample(x)
+            return x
+
+        out = {"lum": temporal_ops(data["lum"])}
+        for k in self.tasks:
+            if k in data and k != "lum":
+                out[k] = temporal_ops(data[k])
+        return out
 
     def get_item(self, idx: int) -> Dict[str, torch.Tensor]:
         """
@@ -238,7 +277,8 @@ class MultiTaskFlyingThings3D(MultiTaskDataset):
             raise KeyError(
                 f"Sequence {idx} is missing the requested keys {self.data_keys}."
             )
-        return sample
+        return self.apply_augmentation(sample) if self.augment else sample
+        #return sample this was the original but is now removed
     def __getstate__(self):
         """Return state values to be pickled."""
         state = self.__dict__.copy()
@@ -250,6 +290,43 @@ class MultiTaskFlyingThings3D(MultiTaskDataset):
     def __setstate__(self, state):
         """Restore state from the unpickled state."""
         self.__dict__.update(state)
+    # ---------------------------------------------------------------------
+    # Augmentation master-switch (getter + setter)
+    # ---------------------------------------------------------------------
+    @property
+    def augment(self) -> bool:
+        """Current augmentation state (True = ON)."""
+        return self._augment
+
+
+    @augment.setter
+    def augment(self, value: bool) -> None:
+        """
+        Toggle all augmentation sub-modules in one go.
+
+        Setting this BEFORE init_augmentation() runs is harmless because we
+        guard with _augmentations_are_initialized.
+        """
+        self._augment = value
+
+        # make sure sub-objects exist before we touch them
+        if not getattr(self, "_augmentations_are_initialized", False):
+            return
+
+        # ── temporal crop randomness ───────────────────────────────────────
+        self.temporal_crop.random = self.random_temporal_crop if value else False
+
+        # ── photometric / geometric aug toggles ────────────────────────────
+        self.jitter.augment        = value
+        self.noise.augment         = value
+        self.rotate.augment        = value
+        self.flip.augment          = value
+        self.gamma_correct.augment = value
+
+        # ── time-axis resamplers (controlled by flags, not by `value`) ─────
+        self.piecewise_resample.augment = self.resampling    # nearest-exact
+        self.linear_interpolate.augment = self.interpolate   # linear interp
+
 
 
 ###############################################################################
@@ -283,6 +360,7 @@ class AugmentedFlyingThings3D(MultiTaskFlyingThings3D):
         # build deterministic variants on first demand
         self._built = False
         self._build()
+
 
     def _build(self):
         if self._built:
