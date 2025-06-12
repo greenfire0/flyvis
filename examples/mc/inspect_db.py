@@ -9,9 +9,11 @@ codec is unavailable, so every file is guaranteed to be playable.
 """
 
 from pathlib import Path
-import numpy as np
+
 import cv2
+import numpy as np
 import torch
+
 from flyvis.datasets.FT3D import MultiTaskFlyingThings3D
 from flyvis.utils.hex_utils import get_hex_coords
 

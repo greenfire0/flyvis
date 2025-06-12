@@ -1,8 +1,8 @@
-import torch
-import numpy as np
 import cv2
-from flyvis.utils.hex_utils import get_hex_coords
+import numpy as np
+import torch
 
+from flyvis.utils.hex_utils import get_hex_coords
 
 
 def hex_to_square(arr: torch.Tensor) -> np.ndarray:

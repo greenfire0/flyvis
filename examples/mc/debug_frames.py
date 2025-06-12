@@ -1,18 +1,14 @@
 # examples/mc/train_ft3d_compare.py
 from __future__ import annotations
-import os, time, numpy as np, torch, cv2
-from pathlib import Path
-from torch.optim import Adam
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
-from datamate import Namespace
 
-from flyvis.network import Network
-from flyvis.datasets.FT3D import MultiTaskFlyingThings3D
-from flyvis.task.decoder import DecoderGAVP
-from flyvis.task.objectives import epe
-from flyvis.utils.hex_utils import get_hex_coords
-from compare_util import hex_to_square, flow_to_rgb
+import os
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+from compare_util import flow_to_rgb, hex_to_square
+
 # ─────────── tweak-here hyper-params ───────────────────────────
 FT3D_ROOT      = Path(os.getenv("FT3D_ROOT", "/mnt/s/datasets/FlyingThings3D"))
 FLOW_SCALE     = 1 / 169.0

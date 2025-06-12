@@ -1,24 +1,27 @@
 # examples/mc/train_ft3d_compare.py
 from __future__ import annotations
-import os, time, numpy as np, torch, cv2
+
+import os
+import time
 from pathlib import Path
+
+import numpy as np
+import torch
+from compare_util import FT3DMatched, MatchFlowCDF
+from datamate import Namespace
+from debug_frames import save_debug_grid
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
-from datamate import Namespace
 
-from flyvis.network import Network
 from flyvis.datasets.FT3D import MultiTaskFlyingThings3D
+from flyvis.network import Network
 from flyvis.task.decoder import DecoderGAVP
 from flyvis.task.mc_decoder import MCDecoderGAVP as DecoderGAVP
 from flyvis.task.objectives import epe
-from flyvis.utils.hex_utils import get_hex_coords
-from debug_frames import save_debug_grid,save_debug_flow
-from compare_util import hex_to_square, flow_to_rgb, MatchFlowCDF, FT3DMatched
 
 # ─────────── tweak-here hyper-params ───────────────────────────
 FT3D_ROOT      = Path(os.getenv("FT3D_ROOT", "/mnt/s/datasets/FlyingThings3D"))
-FLOW_SCALE     = 1 
+FLOW_SCALE     = 1
 EPOCHS         = 50
 BATCH_SIZE     = 8
 DT             = 1 / 50                  # dataset dt
@@ -212,7 +215,7 @@ def train_and_compare():
         opt = Adam([
             {"params": net.parameters(), "lr": lr_net},
             {"params": dec.parameters(), "lr": lr_dec},
-        ], eps=1e-8)        
+        ], eps=1e-8)
         sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, "min", 0.5, patience=3)
 
         t0 = time.perf_counter()

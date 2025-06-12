@@ -1,16 +1,13 @@
-from contextlib import contextmanager
-from itertools import product
-from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
-import re
 import os
+import re
+from pathlib import Path
+from typing import Optional
+
 import cv2
 import numpy as np
-from datamate import Directory, Namespace, root
-from tqdm import tqdm
+
 # Re‑use FlyVis hexagon utilities & augmentation modules
-from flyvis import renderings_dir
-TAG_FLOAT = 202021.25 
+TAG_FLOAT = 202021.25
 
 ###############################################################################
 #                            Data loading helpers                             #
@@ -27,11 +24,17 @@ def download_flyingthings3d(*, flow: bool = True) -> Path:
     guess = os.getenv("FT3D_ROOT") or Path.home() / "datasets" / "FlyingThings3D"
     path = Path(guess)
     if not path.is_dir():
-        raise FileNotFoundError("FlyingThings3D root not found. Set $FT3D_ROOT or pass ft3d_path=")
+        raise FileNotFoundError("FlyingThings3D root not found." \
+        " Set $FT3D_ROOT or pass ft3d_path=")
     return path.resolve()
 
 
-def load_ft3d_sequence(dir_path: Path, sample_fn, *, start: int = 0, end: Optional[int] = None):
+def load_ft3d_sequence(
+    dir_path: Path,
+    sample_fn, *,
+    start: int = 0,
+    end: Optional[int] = None
+    ):
     """
     Load sorted sequence of files with names like OpticalFlowIntoFuture_0011_L.pfm.
     Extracts frame number from filename via regex.
@@ -47,7 +50,7 @@ def load_ft3d_sequence(dir_path: Path, sample_fn, *, start: int = 0, end: Option
         key=frame_index
     )
     files = files[start:end]
-    return np.stack([sample_fn(p) for p in files]) 
+    return np.stack([sample_fn(p) for p in files])
 
 
 def sample_ft3d_rgb(path: Path) -> np.ndarray:

@@ -1,9 +1,10 @@
 import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+
+from flyvis.datasets.sintel import MultiTaskSintel
 from flyvis.network import Network
 from flyvis.task.decoder import DecoderGAVP
-from flyvis.datasets.sintel import MultiTaskSintel
 from flyvis.task.objectives import epe  # end-point error
 
 # ── 0. Select device ───────────────────────────────────────────────────────────
